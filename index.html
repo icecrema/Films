@@ -765,73 +765,10 @@
     </div>
 
     <script>
-        // Dati di esempio per i risultati di ricerca
-        const sampleResults = [
-            {
-                id: 1,
-                title: "Avengers: Endgame",
-                year: 2019,
-                type: "film",
-                image: "https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg",
-                rating: 8.4
-            },
-            {
-                id: 2,
-                title: "Avengers: Infinity War",
-                year: 2018,
-                type: "film",
-                image: "https://image.tmdb.org/t/p/w500/7WsyChQLEftFiDOVTGkv3hFpyyt.jpg",
-                rating: 8.4
-            },
-            {
-                id: 3,
-                title: "The Avengers",
-                year: 2012,
-                type: "film",
-                image: "https://image.tmdb.org/t/p/w500/RYMX2wcKCBAr24UyPD7xwmjaTn.jpg",
-                rating: 7.7
-            },
-            {
-                id: 4,
-                title: "Avengers: Age of Ultron",
-                year: 2015,
-                type: "film",
-                image: "https://image.tmdb.org/t/p/w500/4ssDuvEDkSArWEdyBl2X5EHvYKU.jpg",
-                rating: 7.3
-            },
-            {
-                id: 5,
-                title: "Avenger",
-                year: 2006,
-                type: "film",
-                image: "https://image.tmdb.org/t/p/w500/5sX0YdXxEeLdnm0jRlB2XmFfUqT.jpg",
-                rating: 5.4
-            },
-            {
-                id: 6,
-                title: "Avengers Confidential: Black Widow & Punisher",
-                year: 2014,
-                type: "anime",
-                image: "https://image.tmdb.org/t/p/w500/qM66Hv4ByAxnipHOn4Wf4XbM5bD.jpg",
-                rating: 6.3
-            },
-            {
-                id: 7,
-                title: "Marvel's The Avengers: Earth's Mightiest Heroes",
-                year: 2010,
-                type: "anime",
-                image: "https://image.tmdb.org/t/p/w500/8hTQjRaw2rAClBSE4dJuBrtL0jX.jpg",
-                rating: 8.0
-            },
-            {
-                id: 8,
-                title: "Ultimate Avengers",
-                year: 2006,
-                type: "anime",
-                image: "https://image.tmdb.org/t/p/w500/9w1U3eMhK0PjT3T8SxQ6a6cXqjK.jpg",
-                rating: 6.5
-            }
-        ];
+        // API Key e endpoint
+        const TMDB_API_KEY = 'ab9127383e0f6c02751abecfc7a89a3b';
+        const TMDB_API_URL = 'https://api.themoviedb.org/3';
+        const JIKAN_API_URL = 'https://api.jikan.moe/v4';
         
         // Elementi DOM
         const searchForm = document.getElementById('search-form');
@@ -842,14 +779,68 @@
         const backBtn = document.getElementById('back-btn');
         const mainContent = document.getElementById('main-content');
         const searchPage = document.getElementById('search-page');
+        const trendingMoviesGrid = document.getElementById('trending-movies');
+        const animeContentGrid = document.getElementById('anime-content');
+        
+        // Funzione per cercare film su TMDB
+        async function searchMovies(query) {
+            try {
+                const response = await fetch(`${TMDB_API_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&language=it-IT`);
+                const data = await response.json();
+                return data.results || [];
+            } catch (error) {
+                console.error('Errore nella ricerca film:', error);
+                return [];
+            }
+        }
+        
+        // Funzione per cercare anime su Jikan
+        async function searchAnime(query) {
+            try {
+                const response = await fetch(`${JIKAN_API_URL}/anime?q=${encodeURIComponent(query)}&limit=10`);
+                const data = await response.json();
+                return data.data || [];
+            } catch (error) {
+                console.error('Errore nella ricerca anime:', error);
+                return [];
+            }
+        }
+        
+        // Funzione per ottenere i film in tendenza
+        async function getTrendingMovies() {
+            try {
+                const response = await fetch(`${TMDB_API_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&language=it-IT`);
+                const data = await response.json();
+                return data.results.slice(0, 6) || [];
+            } catch (error) {
+                console.error('Errore nel caricamento dei film in tendenza:', error);
+                return [];
+            }
+        }
+        
+        // Funzione per ottenere gli anime popolari
+        async function getPopularAnime() {
+            try {
+                const response = await fetch(`${JIKAN_API_URL}/top/anime?limit=6`);
+                const data = await response.json();
+                return data.data || [];
+            } catch (error) {
+                console.error('Errore nel caricamento degli anime popolari:', error);
+                return [];
+            }
+        }
         
         // Inizializzazione
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             // Carica contenuto principale
-            loadMainContent();
+            const trendingMovies = await getTrendingMovies();
+            displayMovies(trendingMovies, trendingMoviesGrid);
+            
+            const popularAnime = await getPopularAnime();
+            displayAnime(popularAnime);
             
             // Gestione ricerca
-            searchForm.addEventListener('submit', (e) => {
+            searchForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const query = searchInput.value.trim();
                 
@@ -861,8 +852,37 @@
                     mainContent.style.display = 'none';
                     searchPage.style.display = 'block';
                     
+                    // Mostra loader
+                    resultsContainer.innerHTML = '<div class="loader"></div>';
+                    
+                    // Esegui ricerche simultanee
+                    const [movies, anime] = await Promise.all([
+                        searchMovies(query),
+                        searchAnime(query)
+                    ]);
+                    
+                    // Combina i risultati
+                    const combinedResults = [
+                        ...movies.map(movie => ({
+                            ...movie,
+                            type: 'film',
+                            title: movie.title,
+                            year: movie.release_date ? movie.release_date.substring(0, 4) : 'N/A',
+                            image: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : '',
+                            rating: movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A'
+                        })),
+                        ...anime.map(anime => ({
+                            ...anime,
+                            type: 'anime',
+                            title: anime.title,
+                            year: anime.year || 'N/A',
+                            image: anime.images?.jpg?.large_image_url || '',
+                            rating: anime.score ? anime.score : 'N/A'
+                        }))
+                    ];
+                    
                     // Mostra risultati
-                    displaySearchResults(sampleResults);
+                    displaySearchResults(combinedResults);
                 }
             });
             
@@ -873,30 +893,48 @@
             });
             
             // Ricerca in tempo reale per il dropdown
-            searchInput.addEventListener('input', function() {
+            searchInput.addEventListener('input', async function() {
                 const query = this.value.trim();
                 if (query.length < 2) {
                     searchResults.style.display = 'none';
                     return;
                 }
                 
-                // Filtra i risultati per il dropdown
-                const filteredResults = sampleResults.filter(item => 
-                    item.title.toLowerCase().includes(query.toLowerCase())
-                ).slice(0, 5);
+                // Esegui ricerche simultanee
+                const [movies, anime] = await Promise.all([
+                    searchMovies(query),
+                    searchAnime(query)
+                ]);
+                
+                // Combina e limita i risultati per il dropdown
+                const combinedResults = [
+                    ...movies.slice(0, 3).map(movie => ({
+                        ...movie,
+                        type: 'film',
+                        title: movie.title,
+                        year: movie.release_date ? movie.release_date.substring(0, 4) : 'N/A',
+                        image: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : ''
+                    })),
+                    ...anime.slice(0, 2).map(anime => ({
+                        ...anime,
+                        type: 'anime',
+                        title: anime.title,
+                        year: anime.year || 'N/A',
+                        image: anime.images?.jpg?.large_image_url || ''
+                    }))
+                ];
                 
                 // Mostra i risultati nel dropdown
                 searchResults.innerHTML = '';
                 
-                if (filteredResults.length === 0) {
+                if (combinedResults.length === 0) {
                     searchResults.innerHTML = '<div class="result-item">Nessun risultato trovato</div>';
                 } else {
-                    filteredResults.forEach(result => {
+                    combinedResults.forEach(result => {
                         const item = document.createElement('div');
                         item.className = 'result-item';
                         item.innerHTML = `
-                            <img src="${result.image}" alt="${result.title}" 
-                                 onerror="this.src='https://via.placeholder.com/50x70?text=No+image'">
+                            <img src="${result.image || 'https://via.placeholder.com/50x70?text=No+image'}" alt="${result.title}">
                             <div class="result-info">
                                 <div class="result-title">${result.title}</div>
                                 <div class="result-year">${result.year} • ${result.type === 'anime' ? 'Anime' : 'Film'}</div>
@@ -922,107 +960,6 @@
             });
         });
         
-        // Funzione per caricare il contenuto principale
-        function loadMainContent() {
-            // Carica film in tendenza
-            const trendingMovies = [
-                {
-                    id: 1,
-                    title: "Spider-Man: No Way Home",
-                    year: 2021,
-                    image: "https://image.tmdb.org/t/p/w500/1g0dhYtq4irTY1GPXvft6k4YLjm.jpg",
-                    rating: 8.2
-                },
-                {
-                    id: 2,
-                    title: "Dune",
-                    year: 2021,
-                    image: "https://image.tmdb.org/t/p/w500/d5NXSklXo0qyIYkgV94XAgMIckC.jpg",
-                    rating: 8.0
-                },
-                {
-                    id: 3,
-                    title: "The Batman",
-                    year: 2022,
-                    image: "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",
-                    rating: 7.8
-                },
-                {
-                    id: 4,
-                    title: "Top Gun: Maverick",
-                    year: 2022,
-                    image: "https://image.tmdb.org/t/p/w500/62HCnUTziyWcpDaBO2i1DX17ljH.jpg",
-                    rating: 8.3
-                },
-                {
-                    id: 5,
-                    title: "Black Panther: Wakanda Forever",
-                    year: 2022,
-                    image: "https://image.tmdb.org/t/p/w500/sv1xJUazXeYqALzczSZ3O6nkH75.jpg",
-                    rating: 7.5
-                },
-                {
-                    id: 6,
-                    title: "Avatar: The Way of Water",
-                    year: 2022,
-                    image: "https://image.tmdb.org/t/p/w500/t6HIqrRAclMCA60NsSmeqe9RmNV.jpg",
-                    rating: 7.7
-                }
-            ];
-            
-            // Carica anime popolari
-            const popularAnime = [
-                {
-                    id: 1,
-                    title: "Attack on Titan",
-                    year: 2013,
-                    image: "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg",
-                    rating: 8.7
-                },
-                {
-                    id: 2,
-                    title: "Demon Slayer: Kimetsu no Yaiba",
-                    year: 2019,
-                    image: "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg",
-                    rating: 8.7
-                },
-                {
-                    id: 3,
-                    title: "One Piece",
-                    year: 1999,
-                    image: "https://image.tmdb.org/t/p/w500/e3NBGiAifW9Xt8xD5tpARskjccO.jpg",
-                    rating: 8.7
-                },
-                {
-                    id: 4,
-                    title: "Jujutsu Kaisen",
-                    year: 2020,
-                    image: "https://image.tmdb.org/t/p/w500/g1rK2nRXSidcMwNliWDIroWWGTn.jpg",
-                    rating: 8.6
-                },
-                {
-                    id: 5,
-                    title: "My Hero Academia",
-                    year: 2016,
-                    image: "https://image.tmdb.org/t/p/w500/4YF1q1iCUGsZJNDqR3kYRuZQ0Sd.jpg",
-                    rating: 8.3
-                },
-                {
-                    id: 6,
-                    title: "Death Note",
-                    year: 2006,
-                    image: "https://image.tmdb.org/t/p/w500/iigTJJskR1PcjjXqxdyJwVB3BoU.jpg",
-                    rating: 8.6
-                }
-            ];
-            
-            // Mostra film in tendenza
-            displayMovies(trendingMovies, document.getElementById('trending-movies'));
-            
-            // Mostra anime popolari
-            displayAnime(popularAnime);
-        }
-        
         // Funzione per mostrare i risultati di ricerca
         function displaySearchResults(results) {
             resultsContainer.innerHTML = '';
@@ -1046,8 +983,7 @@
                     <div class="type-badge ${result.type === 'anime' ? 'anime-badge' : ''}">
                         ${result.type === 'anime' ? 'ANIME' : 'FILM'}
                     </div>
-                    <img src="${result.image}" alt="${result.title}" 
-                         onerror="this.src='https://via.placeholder.com/300x450?text=Copertina+non+disponibile'">
+                    <img src="${result.image || 'https://via.placeholder.com/300x450?text=Copertina+non+disponibile'}" alt="${result.title}">
                     <div class="result-content">
                         <div class="result-card-title">${result.title}</div>
                         <div class="result-card-info">${result.year}</div>
@@ -1069,17 +1005,22 @@
         function displayMovies(movies, container) {
             container.innerHTML = '';
             
+            if (!movies || movies.length === 0) {
+                container.innerHTML = '<p class="no-results">Impossibile caricare i film</p>';
+                return;
+            }
+            
             movies.forEach(movie => {
                 const movieCard = document.createElement('div');
                 movieCard.className = 'movie-card';
                 movieCard.innerHTML = `
                     <div class="type-badge">FILM</div>
-                    <img src="${movie.image}" alt="${movie.title}" onerror="this.src='https://via.placeholder.com/300x450?text=Copertina+non+disponibile'">
+                    <img src="${movie.poster_path ? 'https://image.tmdb.org/t/p/w500' + movie.poster_path : 'https://via.placeholder.com/300x450?text=Copertina+non+disponibile'}" alt="${movie.title}">
                     <div class="movie-info">
                         <div class="movie-title">${movie.title}</div>
-                        <div class="movie-year">${movie.year}</div>
+                        <div class="movie-year">${movie.release_date ? movie.release_date.substring(0, 4) : 'N/A'}</div>
                         <div class="movie-rating">
-                            <i class="fas fa-star"></i> ${movie.rating}/10
+                            <i class="fas fa-star"></i> ${movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A'}/10
                         </div>
                     </div>
                 `;
@@ -1095,17 +1036,22 @@
             const container = document.getElementById('anime-content');
             container.innerHTML = '';
             
+            if (!animeList || animeList.length === 0) {
+                container.innerHTML = '<p class="no-results">Impossibile caricare gli anime</p>';
+                return;
+            }
+            
             animeList.forEach(anime => {
                 const animeCard = document.createElement('div');
                 animeCard.className = 'movie-card';
                 animeCard.innerHTML = `
                     <div class="type-badge anime-badge">ANIME</div>
-                    <img src="${anime.image}" alt="${anime.title}" onerror="this.src='https://via.placeholder.com/300x450?text=Copertina+non+disponibile'">
+                    <img src="${anime.images?.jpg?.large_image_url || 'https://via.placeholder.com/300x450?text=Copertina+non+disponibile'}" alt="${anime.title}">
                     <div class="movie-info">
                         <div class="movie-title">${anime.title}</div>
-                        <div class="movie-year">${anime.year}</div>
+                        <div class="movie-year">${anime.year || 'N/A'}</div>
                         <div class="movie-rating">
-                            <i class="fas fa-star"></i> ${anime.rating}/10
+                            <i class="fas fa-star"></i> ${anime.score || 'N/A'}/10
                         </div>
                     </div>
                 `;
